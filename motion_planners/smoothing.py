@@ -1,9 +1,11 @@
+import time
 from random import randint, random
-from .utils import INF, elapsed_time, irange, waypoints_from_path, get_pairs, get_distance, \
+
+import numpy as np
+
+from .utils import INF, elapsed_time, irange, waypoints_from_path, ma2_waypoints_from_path, get_pairs, get_distance, \
     convex_combination, flatten, compute_path_cost, default_selector
 
-import time
-import numpy as np
 
 ##################################################
 
@@ -38,12 +40,14 @@ def smooth_path_old(path, extend_fn, collision_fn, max_iterations=50, max_time=I
             smoothed_path = smoothed_path[:i + 1] + shortcut + smoothed_path[j + 1:]
     return smoothed_path
 
+
 ##################################################
 
 def refine_waypoints(waypoints, extend_fn):
-    #if len(waypoints) <= 1:
+    # if len(waypoints) <= 1:
     #    return waypoints
-    return list(flatten(extend_fn(q1, q2) for q1, q2 in get_pairs(waypoints))) # [waypoints[0]] +
+    return list(flatten(extend_fn(q1, q2) for q1, q2 in get_pairs(waypoints)))  # [waypoints[0]] +
+
 
 def smooth_path(path, extend_fn, collision_fn, distance_fn=None, max_iterations=50, max_time=INF, verbose=False):
     """
@@ -64,7 +68,7 @@ def smooth_path(path, extend_fn, collision_fn, distance_fn=None, max_iterations=
         distance_fn = get_distance
     waypoints = waypoints_from_path(path)
     for iteration in irange(max_iterations):
-        #waypoints = waypoints_from_path(waypoints)
+        # waypoints = waypoints_from_path(waypoints)
         if (elapsed_time(start_time) > max_time) or (len(waypoints) <= 2):
             break
         # TODO: smoothing in the same linear segment when circular
@@ -78,12 +82,12 @@ def smooth_path(path, extend_fn, collision_fn, distance_fn=None, max_iterations=
                 iteration, len(waypoints), total_distance, elapsed_time(start_time)))
         probabilities = np.array(distances) / total_distance
 
-        #segment1, segment2 = choices(segments, weights=probabilities, k=2)
+        # segment1, segment2 = choices(segments, weights=probabilities, k=2)
         seg_indices = list(range(len(segments)))
         seg_idx1, seg_idx2 = np.random.choice(seg_indices, size=2, replace=True, p=probabilities)
         if seg_idx1 == seg_idx2:
             continue
-        if seg_idx2 < seg_idx1: # choices samples with replacement
+        if seg_idx2 < seg_idx1:  # choices samples with replacement
             seg_idx1, seg_idx2 = seg_idx2, seg_idx1
         segment1, segment2 = segments[seg_idx1], segments[seg_idx2]
         # TODO: option to sample_fn only adjacent pairs
@@ -91,12 +95,62 @@ def smooth_path(path, extend_fn, collision_fn, distance_fn=None, max_iterations=
                           for i, j in [segment1, segment2]]
         i, _ = segment1
         _, j = segment2
-        new_waypoints = waypoints[:i+1] + [point1, point2] + waypoints[j:] # TODO: reuse computation
+        new_waypoints = waypoints[:i + 1] + [point1, point2] + waypoints[j:]  # TODO: reuse computation
         if compute_path_cost(new_waypoints, cost_fn=distance_fn) >= total_distance:
             continue
         if all(not collision_fn(q) for q in default_selector(extend_fn(point1, point2))):
             waypoints = new_waypoints
-    #return waypoints
+    # return waypoints
     return refine_waypoints(waypoints, extend_fn)
 
-#smooth_path = smooth_path_old
+
+def ma2_smooth_path(path, ma2_extend_fn, ma2_collision_fn, distance_fn0=None, distance_fn1=None,
+                    max_iterations=50, max_time=INF, verbose=False):
+    # TODO: makes an assumption on the distance_fn metric
+    # TODO: smooth until convergence
+    if (path is None) or (max_iterations is None):
+        return path
+    assert (max_iterations < INF) or (max_time < INF)
+    start_time = time.time()
+    if distance_fn0 is None:
+        distance_fn0 = get_distance
+    if distance_fn1 is None:
+        distance_fn1 = get_distance
+    ma2_waypoints = ma2_waypoints_from_path(path)
+    for iteration in irange(max_iterations):
+        if (elapsed_time(start_time) > max_time) or (len(ma2_waypoints) <= 2):
+            break
+        # TODO: smoothing in the same linear segment when circular
+
+        indices = list(range(len(ma2_waypoints)))
+        segments = list(get_pairs(indices))
+        distances = [distance_fn0(ma2_waypoints[i][0], ma2_waypoints[j][0]) +
+                     distance_fn1(ma2_waypoints[i][1], ma2_waypoints[j][1]) for i, j in segments]
+        total_distance = sum(distances)
+        if verbose:
+            print('Iteration: {} | Waypoints: {} | Distance: {:.3f} | Time: {:.3f}'.format(
+                iteration, len(ma2_waypoints), total_distance, elapsed_time(start_time)))
+        probabilities = np.array(distances) / total_distance
+
+        # segment1, segment2 = choices(segments, weights=probabilities, k=2)
+        seg_indices = list(range(len(segments)))
+        seg_idx1, seg_idx2 = np.random.choice(seg_indices, size=2, replace=True, p=probabilities)
+        if seg_idx1 == seg_idx2:
+            continue
+        if seg_idx2 < seg_idx1:  # choices samples with replacement
+            seg_idx1, seg_idx2 = seg_idx2, seg_idx1
+        segment1, segment2 = segments[seg_idx1], segments[seg_idx2]
+        # TODO: option to sample_fn only adjacent pairs
+        point1, point2 = [convex_combination(waypoints[i], waypoints[j], w=random())
+                          for i, j in [segment1, segment2]]
+        i, _ = segment1
+        _, j = segment2
+        new_waypoints = waypoints[:i + 1] + [point1, point2] + waypoints[j:]  # TODO: reuse computation
+        if compute_path_cost(new_waypoints, cost_fn=distance_fn) >= total_distance:
+            continue
+        if all(not collision_fn(q) for q in default_selector(extend_fn(point1, point2))):
+            waypoints = new_waypoints
+    # return waypoints
+    return refine_waypoints(waypoints, extend_fn)
+
+# smooth_path = smooth_path_old

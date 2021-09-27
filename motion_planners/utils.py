@@ -1,11 +1,11 @@
-from random import shuffle
-from itertools import islice
-from collections import deque
-import time
+import cProfile
 import contextlib
 import pstats
-import cProfile
 import random
+import time
+from collections import deque
+from itertools import islice
+from random import shuffle
 
 import numpy as np
 
@@ -15,12 +15,10 @@ RRT_ITERATIONS = 20
 RRT_RESTARTS = 2
 RRT_SMOOTHING = 20
 
-
 try:
-   user_input = raw_input
+    user_input = raw_input
 except NameError:
-   user_input = input
-
+    user_input = input
 
 RED = (1, 0, 0)
 GREEN = (0, 1, 0)
@@ -28,7 +26,7 @@ BLUE = (0, 0, 1)
 
 
 def apply_alpha(color, alpha=1.):
-   return tuple(color[:3]) + (alpha,)
+    return tuple(color[:3]) + (alpha,)
 
 
 def irange(start, stop=None, step=1):  # np.arange
@@ -84,18 +82,18 @@ def is_odd(num):
 def bisect(sequence):
     sequence = list(sequence)
     indices = set()
-    queue = deque([(0, len(sequence)-1)])
+    queue = deque([(0, len(sequence) - 1)])
     while queue:
         lower, higher = queue.popleft()
         if lower > higher:
             continue
         index = int((lower + higher) / 2.)
         assert index not in indices
-        #if is_even(higher - lower):
+        # if is_even(higher - lower):
         yield sequence[index]
         queue.extend([
-            (lower, index-1),
-            (index+1, higher),
+            (lower, index - 1),
+            (index + 1, higher),
         ])
 
 
@@ -123,7 +121,7 @@ def profiler(field='tottime', num=10):
     pr.enable()
     yield
     pr.disable()
-    pstats.Stats(pr).sort_stats(field).print_stats(num) # cumtime | tottime
+    pstats.Stats(pr).sort_stats(field).print_stats(num)  # cumtime | tottime
 
 
 def inf_sequence():
@@ -148,6 +146,7 @@ def get_sign(x):
 def strictly_increasing(sequence):
     return all(x2 > x1 for x1, x2 in get_pairs(sequence))
 
+
 ##################################################
 
 def get_delta(q1, q2):
@@ -166,6 +165,12 @@ def get_unit_vector(vec):
 
 
 def compute_path_cost(path, cost_fn=get_distance):
+    if path is None:
+        return INF
+    return sum(cost_fn(*pair) for pair in get_pairs(path))
+
+
+def compute_ma2_path_cost(path, cost_fn0=get_distance, cost_fn1=get_distance):
     if path is None:
         return INF
     return sum(cost_fn(*pair) for pair in get_pairs(path))
@@ -202,10 +207,43 @@ def waypoints_from_path(path, tolerance=1e-3):
     waypoints.append(last_conf)
     return waypoints
 
+
+def get_ma2_difference(q2_pair, q1_pair):
+    return np.array(q2_pair[0] + q2_pair[1]) - np.array(q1_pair[0] + q1_pair[1])
+
+
+def ma2_remove_redundant(path, tolerance=1e-3):
+    assert path
+    new_path = [path[0]]
+    for conf_pair in path[1:]:
+        difference = get_ma2_difference(new_path[-1], conf_pair)
+        if not np.allclose(np.zeros(len(difference)), difference, atol=tolerance, rtol=0):
+            new_path.append(conf_pair)
+    return new_path
+
+
+def ma2_waypoints_from_path(path, tolerance=1e-3):
+    path = ma2_remove_redundant(path, tolerance=tolerance)
+    if len(path) < 2:
+        return path
+    ma2_waypoints = [path[0]]
+    last_conf_pair = path[1]
+    last_difference = get_unit_vector(get_ma2_difference(last_conf_pair, ma2_waypoints[-1]))
+    for conf_pair in path[2:]:
+        difference = get_unit_vector(get_ma2_difference(conf_pair, ma2_waypoints[-1]))
+        if not np.allclose(last_difference, difference, atol=tolerance, rtol=0):
+            ma2_waypoints.append(last_conf_pair)
+            difference = get_unit_vector(get_ma2_difference(conf_pair, ma2_waypoints[-1]))
+        last_conf_pair = conf_pair
+        last_difference = difference
+    ma2_waypoints.append(last_conf_pair)
+    return ma2_waypoints
+
+
 ##################################################
 
 def convex_combination(x, y, w=0.5):
-    return (1-w)*np.array(x) + w*np.array(y)
+    return (1 - w) * np.array(x) + w * np.array(y)
 
 
 def uniform_generator(d):
@@ -217,12 +255,13 @@ def halton_generator(d, seed=None):
     import ghalton
     if seed is None:
         seed = random.randint(0, 1000)
-    #sequencer = ghalton.Halton(d)
+    # sequencer = ghalton.Halton(d)
     sequencer = ghalton.GeneralizedHalton(d, seed)
-    #sequencer.reset()
+    # sequencer.reset()
     while True:
         [weights] = sequencer.get(1)
         yield np.array(weights)
+
 
 def unit_generator(d, use_halton=False):
     if use_halton:
@@ -240,6 +279,7 @@ def interval_generator(lower, upper, **kwargs):
     if np.equal(lower, upper).all():
         return iter([lower])
     return (convex_combination(lower, upper, w=weights) for weights in unit_generator(d=len(lower), **kwargs))
+
 
 ##################################################
 
@@ -259,4 +299,4 @@ def bisect_selector(path):
     return bisect(path)
 
 
-default_selector = bisect_selector # random_selector
+default_selector = bisect_selector  # random_selector
