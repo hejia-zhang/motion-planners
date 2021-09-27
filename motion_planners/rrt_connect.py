@@ -4,6 +4,7 @@ from .primitives import extend_towards
 from .rrt import TreeNode, configs
 from .utils import irange, RRT_ITERATIONS, INF, elapsed_time
 
+
 def wrap_collision_fn(collision_fn):
     # TODO: joint limits
     # import inspect
@@ -14,7 +15,9 @@ def wrap_collision_fn(collision_fn):
             return collision_fn(q1, q2)
         except TypeError:
             return collision_fn(q2)
+
     return fn
+
 
 def rrt_connect(start, goal, distance_fn, sample_fn, extend_fn, collision_fn,
                 max_iterations=RRT_ITERATIONS, max_time=INF, **kwargs):
@@ -35,8 +38,8 @@ def rrt_connect(start, goal, distance_fn, sample_fn, extend_fn, collision_fn,
     if collision_fn(start) or collision_fn(goal):
         return None
     # TODO: support continuous collision_fn with two arguments
-    #collision_fn = wrap_collision_fn(collision_fn)
-    nodes1, nodes2 = [TreeNode(start)], [TreeNode(goal)] # TODO: allow a tree to be prespecified (possibly as start)
+    # collision_fn = wrap_collision_fn(collision_fn)
+    nodes1, nodes2 = [TreeNode(start)], [TreeNode(goal)]  # TODO: allow a tree to be prespecified (possibly as start)
     for iteration in irange(max_iterations):
         if elapsed_time(start_time) >= max_time:
             break
@@ -55,11 +58,12 @@ def rrt_connect(start, goal, distance_fn, sample_fn, extend_fn, collision_fn,
             path1, path2 = last1.retrace(), last2.retrace()
             if swap:
                 path1, path2 = path2, path1
-            #print('{} max_iterations, {} nodes'.format(iteration, len(nodes1) + len(nodes2)))
+            # print('{} max_iterations, {} nodes'.format(iteration, len(nodes1) + len(nodes2)))
             path = configs(path1[:-1] + path2[::-1])
             # TODO: return the trees
             return path
     return None
+
 
 #################################################################
 
@@ -78,6 +82,29 @@ def birrt(start, goal, distance_fn, sample_fn, extend_fn, collision_fn, **kwargs
     from .meta import random_restarts
     solutions = random_restarts(rrt_connect, start, goal, distance_fn, sample_fn, extend_fn, collision_fn,
                                 max_solutions=1, **kwargs)
+    if not solutions:
+        return None
+    return solutions[0]
+
+
+def birrt(start_conf_pair, goal_conf_pair, distance_fn0, distance_fn1, sample_fn0,
+          ma2_extend_fn, ma2_collision_fn, **kwargs):
+    """
+    :param start_conf_pair: Start configuration - (conf0, conf1)
+    :param goal_conf_pair: End configuration - (conf0, conf1)
+    :param distance_fn0: Distance function - distance_fn(q1, q2)->float
+    :param distance_fn1: Distance function - distance_fn(q1, q2)->float
+    :param sample_fn0: Sample function - sample_fn()->conf
+    :param sample_fn1: Sample function - sample_fn()->conf
+    :param ma2_extend_fn: Extension function - extend_fn((q0_1, q1_1), (q0_2, q1_2))->[(q0', q1'), ..., (q0", q1")]
+    :param ma2_collision_fn: Collision function - collision_fn((q0, q1))->bool
+    :param kwargs: Keyword arguments
+    :return: Path [(q0', q1'), ..., (q0", q1")] or None if unable to find a solution
+    """
+    # TODO: deprecate
+    from .meta import random_ma2_restarts
+    solutions = random_ma2_restarts(rrt_connect, start, goal, distance_fn, sample_fn, extend_fn, collision_fn,
+                                    max_solutions=1, **kwargs)
     if not solutions:
         return None
     return solutions[0]
