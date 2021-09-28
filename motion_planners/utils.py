@@ -173,7 +173,7 @@ def compute_path_cost(path, cost_fn=get_distance):
 def compute_ma2_path_cost(path, cost_fn0=get_distance, cost_fn1=get_distance):
     if path is None:
         return INF
-    return sum(cost_fn(*pair) for pair in get_pairs(path))
+    return sum(cost_fn0(pair[0][0], pair[1][0]) + cost_fn1(pair[0][1], pair[1][1]) for pair in get_pairs(path))
 
 
 def get_difference(q2, q1):
@@ -244,6 +244,10 @@ def ma2_waypoints_from_path(path, tolerance=1e-3):
 
 def convex_combination(x, y, w=0.5):
     return (1 - w) * np.array(x) + w * np.array(y)
+
+
+def ma2_convex_combination(x_pair, y_pair, w=0.5):
+    return convex_combination(x_pair[0], y_pair[0], w), convex_combination(x_pair[1], y_pair[1])
 
 
 def uniform_generator(d):

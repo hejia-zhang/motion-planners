@@ -28,9 +28,10 @@ def extend_towards(tree, target, distance_fn, extend_fn, collision_fn, swap=Fals
 def ma2_extend_towards(tree, target, distance_fn0, distance_fn1, ma2_extend_fn, ma2_collision_fn,
                        swap=False, tree_frequency=1):
     assert tree_frequency >= 1
-    last = argmin(lambda n: distance_fn(n.config, target), tree)
-    extend = list(asymmetric_extend(last.config, target, extend_fn, backward=swap))
-    safe = list(takewhile(negate(collision_fn), extend))
+    last = argmin(lambda n: distance_fn0(n.config[0], target[0]) + distance_fn1(n.config[1], target[1]),
+                  tree)
+    extend = list(asymmetric_extend(last.config, target, ma2_extend_fn, backward=swap))
+    safe = list(takewhile(negate(ma2_collision_fn), extend))
     for i, q in enumerate(safe):
         if (i % tree_frequency == 0) or (i == len(safe) - 1):
             last = TreeNode(q, parent=last)
