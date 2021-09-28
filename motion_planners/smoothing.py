@@ -4,7 +4,7 @@ from random import randint, random
 import numpy as np
 
 from .utils import INF, elapsed_time, irange, waypoints_from_path, ma2_waypoints_from_path, get_pairs, get_distance, \
-    convex_combination, flatten, compute_path_cost, default_selector
+    convex_combination, flatten, compute_path_cost, default_selector, ma2_convex_combination, compute_ma2_path_cost
 
 
 ##################################################
@@ -141,16 +141,16 @@ def ma2_smooth_path(path, ma2_extend_fn, ma2_collision_fn, distance_fn0=None, di
             seg_idx1, seg_idx2 = seg_idx2, seg_idx1
         segment1, segment2 = segments[seg_idx1], segments[seg_idx2]
         # TODO: option to sample_fn only adjacent pairs
-        point1, point2 = [convex_combination(waypoints[i], waypoints[j], w=random())
-                          for i, j in [segment1, segment2]]
+        ma2_point1, ma2_point2 = [ma2_convex_combination(ma2_waypoints[i], ma2_waypoints[j], w=random())
+                                  for i, j in [segment1, segment2]]
         i, _ = segment1
         _, j = segment2
-        new_waypoints = waypoints[:i + 1] + [point1, point2] + waypoints[j:]  # TODO: reuse computation
-        if compute_path_cost(new_waypoints, cost_fn=distance_fn) >= total_distance:
+        new_ma2_waypoints = ma2_waypoints[:i + 1] + [ma2_point1, ma2_point2] + ma2_waypoints[j:]  # TODO: reuse computation
+        if compute_ma2_path_cost(new_ma2_waypoints, cost_fn0=distance_fn0, cost_fn1=distance_fn1) >= total_distance:
             continue
-        if all(not collision_fn(q) for q in default_selector(extend_fn(point1, point2))):
-            waypoints = new_waypoints
+        if all(not ma2_collision_fn(q_pair) for q_pair in default_selector(ma2_extend_fn(ma2_point1, ma2_point2))):
+            ma2_waypoints = new_ma2_waypoints
     # return waypoints
-    return refine_waypoints(waypoints, extend_fn)
+    return refine_waypoints(ma2_waypoints, ma2_extend_fn)
 
 # smooth_path = smooth_path_old
